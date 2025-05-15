@@ -1,12 +1,21 @@
 import os
+import requests
 from dotenv import load_dotenv
-from transformers import AutoTokenizer, AutoModelForCausalLM
-import torch
+import time
 
-# 読み込む
+# 環境変数読み込み
 load_dotenv()
 HANDLE = os.environ['HANDLE']
 APP_PASSWORD = os.environ['APP_PASSWORD']
+HF_API_TOKEN = os.getenv("HF_API_TOKEN")
+
+# HuggingFaceのモデル（Elyzaなど）
+HF_API_URL = "https://api-inference.huggingface.co/models/elyza/ELYZA-japanese-stablelm-instruct-alpha"
+
+headers = {
+    "Authorization": f"Bearer {HF_API_TOKEN}",
+    "Content-Type": "application/json"
+}
 
 # テンプレ返信集
 REPLY_TABLE = {
@@ -86,42 +95,39 @@ REPLY_TABLE = {
 }
 
 # AIモデル準備
-tokenizer = AutoTokenizer.from_pretrained("elyza/ELYZA-japanese-stablelm-instruct-alpha")
-model = AutoModelForCausalLM.from_pretrained("elyza/ELYZA-japanese-stablelm-instruct-alpha")
+def generate_reply_via_api(user_input):
+    prompt = f"ユーザー: {user_input}\nみりんてゃ（甘えん坊で地雷系ENFPっぽい）:"
 
-def generate_reply(input_text):
-    prompt = f"ユーザー: {input_text}\nみりんてゃ（甘えん坊で地雷系ENFPっぽい）: "
-    inputs = tokenizer(prompt, return_tensors="pt")
-    with torch.no_grad():
-        outputs = model.generate(
-            **inputs,
-            max_new_tokens=100,
-            do_sample=True,
-            temperature=0.8,
-            top_p=0.9,
-        )
-    generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
-    reply = generated_text.split("みりんてゃ")[-1].strip()
-    return reply
+    data = {
+        "inputs": prompt,
+        "parameters": {
+            "max_new_tokens": 100,
+            "temperature": 0.8,
+            "top_p": 0.9,
+            "do_sample": True
+        }
+    }
 
-# 実際の返信処理
+    response = requests.post(HF_API_URL, headers=headers, json=data)
+    if response.status_code == 200:
+        result = response.json()
+        generated = result[0]["generated_text"]
+        reply = generated.split("みりんてゃ")[-1].strip()
+        return reply
+    else:
+        return "え〜ん……AIとおしゃべりできないみたい（泣）"
+
 def get_reply(user_text):
     for keyword, reply in REPLY_TABLE.items():
         if keyword in user_text:
             return reply
-    return generate_reply(user_text)
+    return generate_reply_via_api(user_text)
 
 # テスト
 if __name__ == "__main__":
-    user_input = input("相手のリプ: ")
-    print("みりんてゃの返事:", get_reply(user_input))
+    REPLY_INTERVAL = 30  # 秒
 
-    import time
-
-REPLY_INTERVAL = 30  # 30秒ごとに返信（必要に応じて変更）
-
-while True:
-    # 仮の受け取り処理
-    user_input = input("相手のリプ: ")
-    print("みりんてゃの返事:", get_reply(user_input))
-    time.sleep(REPLY_INTERVAL)
+    while True:
+        user_input = input("相手のリプ: ")
+        print("みりんてゃの返事:", get_reply(user_input))
+        time.sleep(REPLY_INTERVAL)
