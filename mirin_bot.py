@@ -1,11 +1,17 @@
 from atproto import Client
 import time
-import random
+import random  
+from datetime import datetime
+import os
+from dotenv import load_dotenv
+from pathlib import Path
 
 # 認証情報（みつきのApp Password）
-load_dotenv()
-HANDLE = os.environ['HANDLE']
-APP_PASSWORD = os.environ['APP_PASSWORD']
+env_path = Path('.') / '.env'
+load_dotenv(dotenv_path=env_path)
+
+HANDLE = os.getenv('HANDLE')
+APP_PASSWORD = os.getenv('APP_PASSWORD')
 
 # 投稿内容
 POST_MESSAGES = [
