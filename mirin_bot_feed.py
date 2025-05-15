@@ -1,25 +1,46 @@
 from atproto import Client, models
-from transformers import GPT2LMHeadModel, GPT2Tokenizer
-import torch
 import time
+import requests
+import os
+from dotenv import load_dotenv
+
+# .envファイルを読み込む
+load_dotenv()
+HF_API_TOKEN = os.getenv("HF_API_TOKEN")  # .envには HF_API_TOKEN=xxxxxxx の形で記載してね
 
 # Blueskyアカウント情報
-load_dotenv()
 HANDLE = os.environ['HANDLE']
 APP_PASSWORD = os.environ['APP_PASSWORD']
 
-# Hugging Face モデル設定
-model_name = "rinna/japanese-gpt2-small"
-tokenizer = GPT2Tokenizer.from_pretrained(model_name)
-model = GPT2LMHeadModel.from_pretrained(model_name)
+# Hugging Face APIで返信を生成する関数
+def generate_reply(prompt):
+    API_URL = "https://api-inference.huggingface.co/models/rinna/japanese-gpt2-small"
+    headers = {
+        "Authorization": f"Bearer {HF_API_TOKEN}"
+    }
+    payload = {
+        "inputs": prompt,
+        "parameters": {
+            "max_new_tokens": 100,
+            "do_sample": True,
+            "temperature": 0.8,
+            "top_k": 50,
+            "top_p": 0.95
+        }
+    }
 
-# Hugging Face テキスト生成関数
-def generate_reply(prompt, max_length=100):
-    input_ids = tokenizer.encode(prompt, return_tensors='pt')
-    output = model.generate(input_ids, max_length=max_length, do_sample=True, temperature=0.8, top_k=50, top_p=0.95)
-    return tokenizer.decode(output[0], skip_special_tokens=True)
+    try:
+        response = requests.post(API_URL, headers=headers, json=payload, timeout=10)
+        result = response.json()
+        if isinstance(result, list):
+            return result[0]["generated_text"].split("みりんてゃ「")[-1].strip()
+        else:
+            return "えへへ、なんかうまく考えつかなかったかも〜…"
+    except Exception as e:
+        print("APIエラー:", e)
+        return "ちょっとだけ、おやすみ中かも…また話してね♡"
 
-# キーワード辞書（辞書下側が優先される）
+# 特定のキーワードに反応する返答一覧
 KEYWORD_RESPONSES = {
     "みりんてゃ": 'みりんてゃのこと呼んだ〜？♡もぉ〜っ！かまってくれて嬉しいに決まってるじゃん♡',
     "みりてゃ": "えっ、呼んだ〜！？みりてゃ参上っ♡ 今日も世界の中心でかわいいしてるよぉっ！",
@@ -35,12 +56,14 @@ KEYWORD_RESPONSES = {
 client = Client()
 client.login(HANDLE, APP_PASSWORD)
 
-# 投稿監視ループ
+# 投稿の監視開始！
 print("監視を開始します…")
 replied_uris = set()
 
 while True:
-    feed = client.app.bsky.feed.get_timeline(limit=20).feed
+    # 修正：limit=20は params に渡す
+    timeline = client.app.bsky.feed.get_timeline(params={"limit": 20})
+    feed = timeline.feed
 
     for post in feed:
         text = post.post.record.text
@@ -62,10 +85,8 @@ while True:
                 reply_text = generate_reply(prompt)
                 print(f"AI返信: {reply_text}")
 
-            client.send_post(
-                text=reply_text,
-                reply_to=models.create_reply_reference(uri=uri, cid=cid)
-            )
+            client.send_post(text=reply_text,
+                             reply_to=models.create_reply_reference(uri=uri, cid=cid))
             replied_uris.add(uri)
 
     time.sleep(60)
