@@ -1,6 +1,7 @@
 from atproto import Client
 import time
-
+import os
+from dotenv import load_dotenv
 # アカウント情報
 load_dotenv()
 HANDLE = os.environ['HANDLE']
