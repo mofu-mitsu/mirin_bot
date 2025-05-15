@@ -2,11 +2,11 @@ from atproto import Client
 import time
 import random
 from datetime import datetime
+import os
 
 # 認証情報（App Password）
-load_dotenv()
-HANDLE = os.environ['HANDLE']
-APP_PASSWORD = os.environ['APP_PASSWORD']
+HANDLE = os.getenv('HANDLE')
+APP_PASSWORD = os.getenv('APP_PASSWORD')
 
 # 時間帯別ポスト内容
 POST_MESSAGES = {
