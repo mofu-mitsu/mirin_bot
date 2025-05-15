@@ -1,10 +1,15 @@
 from atproto import Client
 import time
+from dotenv import load_dotenv
+from pathlib import Path
+import os
 
-# 認証情報
-load_dotenv()
-HANDLE = os.environ['HANDLE']
-APP_PASSWORD = os.environ['APP_PASSWORD']
+# 認証情報（App Password）
+env_path = Path('.') / '.env'
+load_dotenv(dotenv_path=env_path)
+
+HANDLE = os.getenv('HANDLE')
+APP_PASSWORD = os.getenv('APP_PASSWORD')
 
 # ハッシュタグとキーワードのターゲット
 TARGET_HASHTAGS = [
