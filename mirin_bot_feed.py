@@ -1,14 +1,11 @@
 from atproto import Client, models
-import time
 import requests
 import os
 from dotenv import load_dotenv
 
 # .envファイルを読み込む
 load_dotenv()
-HF_API_TOKEN = os.getenv("HF_API_TOKEN")  # .envには HF_API_TOKEN=xxxxxxx の形で記載してね
-
-# Blueskyアカウント情報
+HF_API_TOKEN = os.getenv("HF_API_TOKEN")
 HANDLE = os.environ['HANDLE']
 APP_PASSWORD = os.environ['APP_PASSWORD']
 
@@ -52,41 +49,43 @@ KEYWORD_RESPONSES = {
     "ふわふわ相性診断": "ふたりの相性…ふわふわで、とけちゃいそうっ♡ 結果どうだった〜？教えて教えてっ！",
 }
 
-# クライアント初期化
+# 返信済みURIを記録（今はメモリ内だけ。必要ならJSON保存も可）
+replied_uris = set()
+
+# クライアント初期化してログイン
 client = Client()
 client.login(HANDLE, APP_PASSWORD)
 
-# 投稿の監視開始！
-print("監視を開始します…")
-replied_uris = set()
+# タイムラインを取得（最新20件）
+print("タイムライン確認中…")
+timeline = client.app.bsky.feed.get_timeline(params={"limit": 20})
+feed = timeline.feed
 
-while True:
-    # 修正：limit=20は params に渡す
-    timeline = client.app.bsky.feed.get_timeline(params={"limit": 20})
-    feed = timeline.feed
+for post in feed:
+    text = post.post.record.text
+    uri = post.post.uri
+    cid = post.post.cid
+    author = post.post.author.handle
 
-    for post in feed:
-        text = post.post.record.text
-        uri = post.post.uri
-        cid = post.post.cid
-        author = post.post.author.handle
+    if author != HANDLE and uri not in replied_uris and f"@{HANDLE}" in text:
+        matched = False
+        for keyword, response in KEYWORD_RESPONSES.items():
+            if keyword in text:
+                print(f"キーワード検出: 「{keyword}」→ {text}")
+                reply_text = response
+                matched = True
+                break
 
-        if author != HANDLE and uri not in replied_uris and f"@{HANDLE}" in text:
-            matched = False
-            for keyword, response in KEYWORD_RESPONSES.items():
-                if keyword in text:
-                    print(f"キーワード検出: 「{keyword}」→ {text}")
-                    reply_text = response
-                    matched = True
-                    break
+        if not matched:
+            prompt = f"みりんてゃは地雷系ENFPで、甘えん坊でちょっと病みかわな子。フォロワーが「{text}」って投稿したら、どう返す？\nみりんてゃ「"
+            reply_text = generate_reply(prompt)
+            print(f"AI返信: {reply_text}")
 
-            if not matched:
-                prompt = f"みりんてゃは地雷系ENFPで、甘えん坊でちょっと病みかわな子。フォロワーが「{text}」って投稿したら、どう返す？\nみりんてゃ「"
-                reply_text = generate_reply(prompt)
-                print(f"AI返信: {reply_text}")
+        # 投稿を返信として送信
+        client.send_post(
+            text=reply_text,
+            reply_to=models.create_reply_reference(uri=uri, cid=cid)
+        )
+        replied_uris.add(uri)
 
-            client.send_post(text=reply_text,
-                             reply_to=models.create_reply_reference(uri=uri, cid=cid))
-            replied_uris.add(uri)
-
-    time.sleep(60)
+print("今回の返信処理、完了だよ♡また10分後に会おうね〜っ！")
